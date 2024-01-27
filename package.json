@@ -1,0 +1,32 @@
+{
+  "name": "simplified-concurrency",
+  "version": "0.1.0",
+  "description": "Utility for making concurrency easier to work with using input and output \"gates\" and queuing calls that arrive while another is being processed.",
+  "main": "concurrency.js",
+  "scripts": {
+    "test": "mocha --spec './*.spec.js'",
+    "build": "tsc"
+  },
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jacwright/simplified-concurrency.git"
+  },
+  "keywords": [
+    "Concurrency"
+  ],
+  "author": "Jacob Wright <jacwright@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jacwright/simplified-concurrency/issues"
+  },
+  "homepage": "https://github.com/jacwright/simplified-concurrency#readme",
+  "devDependencies": {
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "chai": "^5.0.3",
+    "mocha": "^10.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
