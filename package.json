@@ -1,6 +1,6 @@
 {
   "name": "simplified-concurrency",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Utility for making concurrency easier to work with using input and output \"gates\" and queuing calls that arrive while another is being processed.",
   "main": "concurrency.js",
   "scripts": {
