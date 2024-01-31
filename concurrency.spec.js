@@ -74,12 +74,15 @@ describe('concurrency', () => {
         blockableResponseFinished = 0;
     });
     it('should block concurrent calls to the same method', async () => {
-        const promise1 = controller.getUniqueNumber();
+        const getNumInnerMost = async () => await controller.getUniqueNumber();
+        const getNumInner = async () => await getNumInnerMost();
+        const getNum = async () => await getNumInner();
+        const promise1 = getNum();
         const promise2 = controller.getUniqueNumber();
         await promise1;
         expect(storage.cache.get('counter')).to.equal(1);
     });
-    it('should run deferred calls after blocks are finished', async () => {
+    it('should run deferred calls after the blocks are finished', async () => {
         const promise1 = controller.getUniqueNumber();
         const promise2 = controller.getUniqueNumber();
         await promise1;
@@ -94,12 +97,11 @@ describe('concurrency', () => {
             expect(blockableCalled).to.equal(1);
         });
         it('should run deferred calls after block', async () => {
-            let firstResult;
             const promise1 = blockableFunction();
-            promise1.then(result => (firstResult = result));
             blockableFunction();
             await promise1;
-            await Promise.resolve();
+            // wait for the next cycle
+            await new Promise(r => setTimeout(r));
             expect(blockableCalled).to.equal(2);
         });
         it('should wait on un-await-ed blocks before returning', async () => {

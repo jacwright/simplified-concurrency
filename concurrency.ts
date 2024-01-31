@@ -191,13 +191,12 @@ export function simplifiedConcurrency() {
   /**
    * Process deferred calls and responses, pausing when blocked again.
    */
-  function process() {
-    tick().then(async () => {
-      while (!blockingCalls.size && (deferredResponses.length || deferredBlocks.length)) {
-        (deferredResponses.length ? deferredResponses : deferredBlocks).shift()!();
-        await tick();
-      }
-    });
+  async function process() {
+    await afterAll();
+    while (!blockingCalls.size && (deferredResponses.length || deferredBlocks.length)) {
+      (deferredResponses.length ? deferredResponses : deferredBlocks).shift()!();
+      await afterAll();
+    }
   }
 
   /**
@@ -233,4 +232,8 @@ export function simplifiedConcurrency() {
 
 async function tick() {
   await Promise.resolve();
+}
+
+async function afterAll() {
+  for (let i = 0; i < 10; i++) await tick();
 }
