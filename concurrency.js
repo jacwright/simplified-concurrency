@@ -3,9 +3,8 @@
  */
 export function simplifiedConcurrency() {
     const blockingCalls = new Set();
-    const callsJustBlocked = new Map();
-    const deferred = [];
-    let call = 0;
+    const deferredBlocks = [];
+    const deferredResponses = [];
     return {
         /**
          * Wrap a function which is blockable.
@@ -108,13 +107,13 @@ export function simplifiedConcurrency() {
          * Block while waiting for the callback to resolve.
          */
         blockWhile,
-        /**
-         * Defers the response of this call if a blocking call is in progress.
-         */
-        deferResponse,
-        /**
-         * Reset for testing.
-         */
+        /** Internal function to call a function that may be deferred if the process is blocking */
+        blockFunctionCall,
+        /** Internal function to return a promise that will resolve when there is no more blocking */
+        blockResponse,
+        /** Internal function to block blockable functions and responses until it has resolved */
+        addBlockingPromise,
+        /** Internal function to reset everything for testing */
         reset,
     };
     /**
@@ -122,14 +121,7 @@ export function simplifiedConcurrency() {
      */
     function blockable(target) {
         return function (...args) {
-            if (!blockingCalls.size) {
-                return target.apply(this, args).then(outputGate);
-            }
-            else {
-                return new Promise((resolve, reject) => {
-                    deferred.push(() => target.apply(this, args).then(outputGate).then(resolve, reject));
-                });
-            }
+            return blockFunctionCall(this, target, args);
         };
     }
     /**
@@ -137,7 +129,7 @@ export function simplifiedConcurrency() {
      */
     function blockableResponse(target) {
         return function (...args) {
-            return deferResponse(target.apply(this, args));
+            return target.apply(this, args).finally(blockResponse);
         };
     }
     /**
@@ -145,77 +137,54 @@ export function simplifiedConcurrency() {
      */
     function blocking(target) {
         return function (...args) {
-            return blockFor(target.apply(this, args));
+            return addBlockingPromise(target.apply(this, args));
         };
     }
     /**
      * Block while waiting for the callback to resolve.
      */
     async function blockWhile(callback) {
-        return blockFor(callback());
+        return addBlockingPromise(callback());
     }
     /**
-     * Defers the response of this call if a blocking call is in progress.
+     * Blocks the execution of this function until there are no more blocking calls in progress.
      */
-    function deferResponse(promise) {
-        return promise.then(onFulfilled, onRejected);
+    async function blockFunctionCall(thisArg, target, args) {
+        if (!blockingCalls.size) {
+            return target.apply(thisArg, args).finally(blockResponse);
+        }
+        return new Promise((resolve, reject) => {
+            deferredBlocks.push(() => target.apply(thisArg, args).finally(blockResponse).then(resolve, reject));
+        });
     }
     /**
-     *
+     * Add to a promise.finally(blockResponse) to defer the response until all blocking calls are finished.
      */
-    async function blockFor(promise) {
-        const thisCall = ++call;
-        blockingCalls.add(thisCall);
-        callsJustBlocked.set(thisCall, promise);
-        afterAll().then(() => callsJustBlocked.delete(thisCall));
-        function finish() {
-            if (!blockingCalls.has(thisCall))
-                return;
-            blockingCalls.delete(thisCall);
-            callsJustBlocked.delete(thisCall);
+    async function blockResponse() {
+        return blockingCalls.size ? new Promise(r => deferredResponses.push(r)) : Promise.resolve();
+    }
+    /**
+     * Blocks the execution of new actions until the given promise is resolved or rejected.
+     */
+    async function addBlockingPromise(promise) {
+        blockingCalls.add(promise);
+        promise.finally(() => {
+            blockingCalls.delete(promise);
             if (!blockingCalls.size)
-                afterAll().then(process);
-        }
-        let response;
-        try {
-            response = await promise;
-        }
-        catch (e) {
-            finish();
-            throw e;
-        }
-        finish();
-        return response;
-    }
-    /**
-     * Called when a promise is resolved, defers the response if a blocking call is in progress.
-     */
-    function onFulfilled(result) {
-        if (blockingCalls.size) {
-            return new Promise(resolve => deferred.push(() => resolve(result)));
-        }
-        else {
-            return result;
-        }
-    }
-    /**
-     * Called when a promise is rejected, defers the response if a blocking call is in progress.
-     */
-    function onRejected(reason) {
-        if (blockingCalls.size) {
-            return new Promise((resolve, reject) => deferred.push(() => reject(reason)));
-        }
-        else {
-            return Promise.reject(reason);
-        }
+                process();
+        });
+        return promise;
     }
     /**
      * Process deferred calls and responses, pausing when blocked again.
      */
     function process() {
-        while (!blockingCalls.size && deferred.length) {
-            deferred.shift()();
-        }
+        tick().then(async () => {
+            while (!blockingCalls.size && (deferredResponses.length || deferredBlocks.length)) {
+                (deferredResponses.length ? deferredResponses : deferredBlocks).shift()();
+                await tick();
+            }
+        });
     }
     /**
      * Allows functions to act as decorators as well as simple wrapping functions. If a descriptor is passed, it is
@@ -237,34 +206,15 @@ export function simplifiedConcurrency() {
         return decoratable;
     }
     /**
-     * Don't let a blockable function return its result until all blocking calls it initiated are finished.
-     */
-    function outputGate(result) {
-        if (callsJustBlocked.size) {
-            const promises = Array.from(callsJustBlocked.values());
-            callsJustBlocked.forEach((promise, call) => blockingCalls.delete(call));
-            callsJustBlocked.clear();
-            afterAll().then(process);
-            return Promise.all(promises).then(() => result);
-        }
-        else {
-            return result;
-        }
-    }
-    /**
      * Reset for testing.
      */
     function reset() {
         blockingCalls.clear();
-        callsJustBlocked.clear();
-        deferred.length = 0;
-        call = 0;
+        deferredResponses.length = 0;
+        deferredBlocks.length = 0;
     }
 }
-function tick() {
-    return Promise.resolve();
+async function tick() {
+    await Promise.resolve();
 }
-async function afterAll() {
-    for (let i = 0; i < 10; i++)
-        await tick();
-}
+//# sourceMappingURL=concurrency.js.map

@@ -4,7 +4,7 @@
   "description": "Utility for making concurrency easier to work with using input and output \"gates\" and queuing calls that arrive while another is being processed.",
   "main": "concurrency.js",
   "scripts": {
-    "test": "mocha --spec './*.spec.js'",
+    "test": "npm run build && mocha --spec './*.spec.js'",
     "build": "tsc"
   },
   "type": "module",

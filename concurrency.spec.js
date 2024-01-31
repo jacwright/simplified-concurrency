@@ -6,8 +6,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 };
 import { expect } from 'chai';
 import { simplifiedConcurrency } from './concurrency.js';
-describe.only('concurrency', () => {
-    const { blockable, blockableResponse, blocking, reset } = simplifiedConcurrency();
+describe('concurrency', () => {
+    const { blockable, blockableResponse, blocking, addBlockingPromise, reset } = simplifiedConcurrency();
     let storage;
     let controller;
     let blockableCalled = 0;
@@ -29,7 +29,7 @@ describe.only('concurrency', () => {
         }
         async put(key, value) {
             this.cache.set(key, value);
-            return new Promise(resolve => setTimeout(() => resolve(value), 100));
+            return new Promise(resolve => setTimeout(() => resolve(), 100));
         }
     }
     __decorate([
@@ -43,8 +43,9 @@ describe.only('concurrency', () => {
             this.storage = new Storage();
         }
         async getUniqueNumber() {
-            const val = await this.storage.get('counter');
-            this.storage.put('counter', (val || 0) + 1);
+            let val = await this.storage.get('counter');
+            val = (val || 0) + 1;
+            this.storage.put('counter', val);
             return val;
         }
     }
@@ -56,8 +57,7 @@ describe.only('concurrency', () => {
     });
     const blockableFunction = blockable(async () => {
         blockableCalled++;
-        await blockFor10();
-        blockFor10();
+        await addBlockingPromise(new Promise(resolve => setTimeout(resolve, 10)));
         return 'foo';
     });
     const blockableResponseFunction = blockableResponse(async () => {
@@ -73,23 +73,19 @@ describe.only('concurrency', () => {
         blockingFinished = 0;
         blockableResponseFinished = 0;
     });
-    // it('should block concurrent calls to the same method', async () => {
-    //   let called = 0;
-    //   function blockableFunction() {
-    //     called++;
-    //   }
-    //   const promise1 = controller.getUniqueNumber();
-    //   const promise2 = controller.getUniqueNumber();
-    //   await promise1;
-    //   expect(storage.cache.get('counter')).to.equal(1);
-    // });
-    // it('should run deferred calls after blocks are finished', async () => {
-    //   const promise1 = controller.getUniqueNumber();
-    //   const promise2 = controller.getUniqueNumber();
-    //   await promise1;
-    //   await promise2;
-    //   expect(storage.cache.get('counter')).to.equal(2);
-    // });
+    it('should block concurrent calls to the same method', async () => {
+        const promise1 = controller.getUniqueNumber();
+        const promise2 = controller.getUniqueNumber();
+        await promise1;
+        expect(storage.cache.get('counter')).to.equal(1);
+    });
+    it('should run deferred calls after blocks are finished', async () => {
+        const promise1 = controller.getUniqueNumber();
+        const promise2 = controller.getUniqueNumber();
+        await promise1;
+        await promise2;
+        expect(storage.cache.get('counter')).to.equal(2);
+    });
     describe('blockable', () => {
         it('should defer calls when blocked', async () => {
             expect(blockableCalled).to.equal(0);
@@ -102,7 +98,8 @@ describe.only('concurrency', () => {
             const promise1 = blockableFunction();
             promise1.then(result => (firstResult = result));
             blockableFunction();
-            await blockingPromise;
+            await promise1;
+            await Promise.resolve();
             expect(blockableCalled).to.equal(2);
         });
         it('should wait on un-await-ed blocks before returning', async () => {
@@ -140,3 +137,4 @@ describe.only('concurrency', () => {
     });
     describe('blocking', () => { });
 });
+//# sourceMappingURL=concurrency.spec.js.map
