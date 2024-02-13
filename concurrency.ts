@@ -153,7 +153,7 @@ export function simplifiedConcurrency() {
   /**
    * Block while waiting for the callback to resolve.
    */
-  async function blockWhile(callback: Function): Promise<any> {
+  async function blockWhile<T = any>(callback: (...args: any[]) => Promise<T>) {
     return addBlockingPromise(callback());
   }
 

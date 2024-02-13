@@ -190,7 +190,7 @@ export function simplifiedConcurrency() {
      * assumed to be a decorator, otherwise it is assumed to be a wrapping function.
      */
     function makeDecoratable(wrapper) {
-        function decoratable(target, propertyKey, descriptor) {
+        function decoratable(target, _propertyKey, descriptor) {
             const origFunc = (descriptor && descriptor.value) || target;
             if (typeof origFunc !== 'function')
                 throw new TypeError('Blocking method wrappers can only be used on functions');
