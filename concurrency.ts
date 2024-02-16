@@ -109,16 +109,20 @@ export function simplifiedConcurrency() {
     fetch: blockableResponse(fetch),
 
     /**
-     * Block while waiting for the callback to resolve.
+     * Block while waiting for the promise or callback to resolve.
      */
     blockWhile,
 
-    /** Internal function to call a function that may be deferred if the process is blocking */
-    blockFunctionCall,
-    /** Internal function to return a promise that will resolve when there is no more blocking */
+    /**
+     * Block the promise or callback from resolving until all blocking calls are finished.
+     */
     blockResponse,
-    /** Internal function to block blockable functions and responses until it has resolved */
-    addBlockingPromise,
+
+    /**
+     * Block the given function from executing until all blocking calls are finished.
+     */
+    blockFunction,
+
     /** Internal function to reset everything for testing */
     reset,
   };
@@ -128,7 +132,7 @@ export function simplifiedConcurrency() {
    */
   function blockable<T extends Function>(target: T): T {
     return function (this: any, ...args: any[]) {
-      return blockFunctionCall(this, target, args);
+      return blockFunction(target, args, this);
     } as unknown as T;
   }
 
@@ -137,7 +141,7 @@ export function simplifiedConcurrency() {
    */
   function blockableResponse<T extends Function>(target: T): T {
     return function (this: any, ...args: any[]) {
-      return target.apply(this, args).finally(blockResponse);
+      return blockResponse(target.apply(this, args));
     } as unknown as T;
   }
 
@@ -146,40 +150,43 @@ export function simplifiedConcurrency() {
    */
   function blocking<T extends Function>(target: T): T {
     return function (this: any, ...args: any[]) {
-      return addBlockingPromise(target.apply(this, args));
+      return blockWhile(target.apply(this, args));
     } as unknown as T;
-  }
-
-  /**
-   * Block while waiting for the callback to resolve.
-   */
-  async function blockWhile<T = any>(callback: (...args: any[]) => Promise<T>) {
-    return addBlockingPromise(callback());
   }
 
   /**
    * Blocks the execution of this function until there are no more blocking calls in progress.
    */
-  async function blockFunctionCall(thisArg: any, target: Function, args: any[]) {
+  async function blockFunction(target: Function, args: any[], thisArg?: any) {
     if (!blockingCalls.size) {
-      return target.apply(thisArg, args).finally(blockResponse);
+      return blockResponse(target.apply(thisArg, args));
     }
     return new Promise((resolve, reject) => {
-      deferredBlocks.push(() => target.apply(thisArg, args).finally(blockResponse).then(resolve, reject));
+      deferredBlocks.push(() => blockResponse(target.apply(thisArg, args)).then(resolve, reject));
     });
   }
 
   /**
-   * Add to a promise.finally(blockResponse) to defer the response until all blocking calls are finished.
+   * Block the promise or callback from resolving until all blocking calls are finished.
    */
-  async function blockResponse() {
-    return blockingCalls.size ? new Promise(r => deferredResponses.push(r as any)) : Promise.resolve();
+  async function blockResponse<T>(callbackOrPromise: Promise<T> | ((...args: any[]) => Promise<T>)) {
+    let promise = callbackOrPromise as Promise<T>;
+    if (typeof callbackOrPromise === 'function' && typeof promise.then !== 'function') {
+      promise = callbackOrPromise();
+    }
+    return promise.finally(() =>
+      blockingCalls.size ? new Promise(r => deferredResponses.push(r as any)) : Promise.resolve()
+    );
   }
 
   /**
-   * Blocks the execution of new actions until the given promise is resolved or rejected.
+   * Blocks the execution of new actions until the given promise/callback is resolved or rejected.
    */
-  async function addBlockingPromise<T>(promise: Promise<T>) {
+  async function blockWhile<T>(callbackOrPromise: Promise<T> | ((...args: any[]) => Promise<T>)) {
+    let promise = callbackOrPromise as Promise<T>;
+    if (typeof callbackOrPromise === 'function' && typeof promise.then !== 'function') {
+      promise = callbackOrPromise();
+    }
     blockingCalls.add(promise);
     promise.finally(() => {
       blockingCalls.delete(promise);

@@ -7,7 +7,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 import { expect } from 'chai';
 import { simplifiedConcurrency } from './concurrency.js';
 describe('concurrency', () => {
-    const { blockable, blockableResponse, blocking, addBlockingPromise, reset } = simplifiedConcurrency();
+    const { blockable, blockableResponse, blocking, blockWhile: blockOthersWhile, reset } = simplifiedConcurrency();
     let storage;
     let controller;
     let blockableCalled = 0;
@@ -57,7 +57,7 @@ describe('concurrency', () => {
     });
     const blockableFunction = blockable(async () => {
         blockableCalled++;
-        await addBlockingPromise(new Promise(resolve => setTimeout(resolve, 10)));
+        await blockOthersWhile(new Promise(resolve => setTimeout(resolve, 10)));
         return 'foo';
     });
     const blockableResponseFunction = blockableResponse(async () => {
